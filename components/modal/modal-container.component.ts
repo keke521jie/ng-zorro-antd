@@ -26,7 +26,7 @@ import { NzModalTitleComponent } from './modal-title.component';
       cdkDragBoundary=".cdk-overlay-container"
       [cdkDragDisabled]="!config.nzDraggable"
       role="document"
-      class="ant-modal"
+      class="ant-modal ant-zoom-enter"
       [class]="config.nzClassName!"
       [style]="config.nzStyle!"
       [style.width]="config?.nzWidth! | nzToCssUnit"

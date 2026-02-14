@@ -33,7 +33,7 @@ import { BaseModalContainerComponent } from './modal-container.directive';
     <div
       #modalElement
       role="document"
-      class="ant-modal"
+      class="ant-modal ant-zoom-enter"
       [class]="config.nzClassName!"
       [style]="config.nzStyle!"
       [style.width]="config?.nzWidth! | nzToCssUnit"

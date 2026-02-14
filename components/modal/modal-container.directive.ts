@@ -197,7 +197,6 @@ export class BaseModalContainerComponent extends BasePortalOutlet {
     this.setModalTransformOrigin();
     const modalElement = this.modalElementRef.nativeElement;
     const backdropElement = this.overlayRef.backdropElement;
-    modalElement.classList.add(ZOOM_CLASS_NAME_MAP.enter);
     modalElement.classList.add(ZOOM_CLASS_NAME_MAP.enterActive);
     if (backdropElement) {
       backdropElement.classList.add(FADE_CLASS_NAME_MAP.enter);
@@ -291,6 +290,9 @@ export class BaseModalContainerComponent extends BasePortalOutlet {
     this.animationStateChanged.emit('enter-start');
 
     if (this.animationDisabled()) {
+      // Remove the initial animation class when animation is disabled
+      const modalElement = this.modalElementRef.nativeElement;
+      modalElement.classList.remove(ZOOM_CLASS_NAME_MAP.enter);
       this.trapFocus();
       this.animationStateChanged.emit('enter-active');
     } else {
