@@ -7,16 +7,18 @@ import { NgTemplateOutlet } from '@angular/common';
 import {
   booleanAttribute,
   ChangeDetectionStrategy,
-  ChangeDetectorRef,
   Component,
+  computed,
   DestroyRef,
+  effect,
   forwardRef,
   inject,
-  Input,
-  OnChanges,
+  Injector,
+  input,
   OnInit,
-  SimpleChanges,
+  signal,
   TemplateRef,
+  untracked,
   ViewEncapsulation
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -49,6 +51,8 @@ function labelsOfType(type: NzCronExpressionType): TimeType[] {
   return ['minute', 'hour', 'day', 'month', 'week'];
 }
 
+const defaultCron: Cron = { second: '0', minute: '*', hour: '*', day: '*', month: '*', week: '*' };
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
@@ -59,19 +63,19 @@ function labelsOfType(type: NzCronExpressionType): TimeType[] {
       <div class="ant-cron-expression-content">
         <div
           class="ant-input ant-cron-expression-input-group"
-          [class.ant-input-lg]="nzSize === 'large'"
-          [class.ant-input-sm]="nzSize === 'small'"
-          [class.ant-input-borderless]="nzBorderless"
-          [class.ant-cron-expression-input-group-focus]="focus && !nzBorderless"
-          [class.ant-input-status-error]="form.invalid && !nzBorderless"
-          [class.ant-cron-expression-input-group-error-focus]="form.invalid && focus && !nzBorderless"
-          [class.ant-input-disabled]="nzDisabled"
+          [class.ant-input-lg]="nzSize() === 'large'"
+          [class.ant-input-sm]="nzSize() === 'small'"
+          [class.ant-input-borderless]="nzBorderless()"
+          [class.ant-cron-expression-input-group-focus]="focus() && !nzBorderless()"
+          [class.ant-input-status-error]="form.invalid && !nzBorderless()"
+          [class.ant-cron-expression-input-group-error-focus]="form.invalid && focus() && !nzBorderless()"
+          [class.ant-input-disabled]="finalDisabled()"
         >
-          @for (label of labels; track label) {
+          @for (label of labels(); track label) {
             <nz-cron-expression-input
-              [value]="form.controls[label].value"
+              [value]="cronValue()[label] ?? ''"
               [label]="label"
-              [disabled]="nzDisabled"
+              [disabled]="finalDisabled()"
               (focusEffect)="focusEffect($event)"
               (blurEffect)="blurEffect()"
               (getValue)="getValue($event)"
@@ -80,27 +84,27 @@ function labelsOfType(type: NzCronExpressionType): TimeType[] {
         </div>
         <div
           class="ant-cron-expression-label-group"
-          [class.ant-input-lg]="nzSize === 'large'"
-          [class.ant-cron-expression-label-group-default]="nzSize === 'default'"
-          [class.ant-input-sm]="nzSize === 'small'"
+          [class.ant-input-lg]="nzSize() === 'large'"
+          [class.ant-cron-expression-label-group-default]="nzSize() === 'default'"
+          [class.ant-input-sm]="nzSize() === 'small'"
         >
-          @for (label of labels; track label) {
-            <nz-cron-expression-label [type]="label" [labelFocus]="labelFocus" [locale]="locale" />
+          @for (label of labels(); track label) {
+            <nz-cron-expression-label [type]="label" [labelFocus]="labelFocus()" [locale]="locale()" />
           }
         </div>
-        @if (!nzCollapseDisable) {
+        @if (!nzCollapseDisable()) {
           <nz-cron-expression-preview
-            [TimeList]="nextTimeList"
+            [TimeList]="nextTimeList()"
             [visible]="form.valid"
-            [locale]="locale"
-            [nzSemantic]="nzSemantic"
+            [locale]="locale()"
+            [nzSemantic]="nzSemantic()"
             (loadMorePreview)="loadMorePreview()"
           />
         }
       </div>
-      @if (nzExtra) {
+      @if (nzExtra()) {
         <div class="ant-cron-expression-map">
-          <ng-template [ngTemplateOutlet]="nzExtra" />
+          <ng-template [ngTemplateOutlet]="nzExtra()" />
         </div>
       }
     </div>
@@ -124,32 +128,36 @@ function labelsOfType(type: NzCronExpressionType): TimeType[] {
     NgTemplateOutlet
   ]
 })
-export class NzCronExpressionComponent implements OnInit, OnChanges, ControlValueAccessor, Validator {
+export class NzCronExpressionComponent implements OnInit, ControlValueAccessor, Validator {
   private readonly formBuilder = inject(FormBuilder);
-  private readonly cdr = inject(ChangeDetectorRef);
   private readonly i18n = inject(NzI18nService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
 
-  @Input() nzSize: NzCronExpressionSize = 'default';
-  @Input() nzType: NzCronExpressionType = 'linux';
-  @Input({ transform: booleanAttribute }) nzCollapseDisable: boolean = false;
-  @Input() nzExtra?: TemplateRef<void> | null = null;
-  @Input() nzSemantic: TemplateRef<void> | null = null;
-  @Input({ transform: booleanAttribute }) nzBorderless = false;
-  @Input({ transform: booleanAttribute }) nzDisabled = false;
+  readonly nzSize = input<NzCronExpressionSize>('default');
+  readonly nzType = input<NzCronExpressionType>('linux');
+  readonly nzCollapseDisable = input(false, { transform: booleanAttribute });
+  readonly nzExtra = input<TemplateRef<void> | null>(null);
+  readonly nzSemantic = input<TemplateRef<void> | null>(null);
+  readonly nzBorderless = input(false, { transform: booleanAttribute });
+  readonly nzDisabled = input(false, { transform: booleanAttribute });
 
-  locale!: NzCronExpressionI18nInterface;
-  focus: boolean = false;
-  labelFocus: TimeType | null = null;
-  labels: TimeType[] = labelsOfType(this.nzType);
-  interval!: ReturnType<typeof CronExpressionParser.parse>;
-  nextTimeList: Date[] = [];
-  private isNzDisableFirstChange: boolean = true;
+  private readonly _controlDisabled = signal(false);
+  readonly finalDisabled = computed(() => this.nzDisabled() || this._controlDisabled());
+
+  readonly locale = signal<NzCronExpressionI18nInterface>({} as NzCronExpressionI18nInterface);
+  readonly focus = signal(false);
+  readonly labelFocus = signal<TimeType | null>(null);
+  readonly labels = computed(() => labelsOfType(this.nzType()));
+  readonly nextTimeList = signal<Date[]>([]);
+  readonly cronValue = signal<Cron>({ ...defaultCron });
 
   protected readonly cronValidatorFn: ValidatorFn = (control: AbstractControl): ValidationErrors | null => {
     if (control.value) {
       try {
-        const cron = this.labels.map(label => control.value[label]).join(' ');
+        const cron = this.labels()
+          .map(label => control.value[label])
+          .join(' ');
         CronExpressionParser.parse(cron);
       } catch {
         return { error: true };
@@ -173,13 +181,14 @@ export class NzCronExpressionComponent implements OnInit, OnChanges, ControlValu
   onChange: NzSafeAny = () => {};
   onTouch: () => void = () => null;
 
-  convertFormat(value: string): void {
+  private convertFormat(value: string): void {
     const values = value.split(' ');
-    const valueObject = this.labels.reduce((obj, label, idx) => {
+    const valueObject = this.labels().reduce((obj, label, idx) => {
       obj[label] = values[idx];
       return obj;
     }, {} as Cron);
-    this.form.patchValue(valueObject);
+    this.cronValue.set(valueObject);
+    this.form.patchValue(valueObject, { emitEvent: false });
   }
 
   writeValue(value: string | null): void {
@@ -201,37 +210,36 @@ export class NzCronExpressionComponent implements OnInit, OnChanges, ControlValu
   }
 
   setDisabledState(isDisabled: boolean): void {
-    this.nzDisabled = (this.isNzDisableFirstChange && this.nzDisabled) || isDisabled;
-    this.isNzDisableFirstChange = false;
-    this.cdr.markForCheck();
+    this._controlDisabled.set(isDisabled);
   }
 
   ngOnInit(): void {
+    this.locale.set(this.i18n.getLocaleData('CronExpression'));
     this.i18n.localeChange.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
-      this.locale = this.i18n.getLocaleData('CronExpression');
-      this.cdr.markForCheck();
+      this.locale.set(this.i18n.getLocaleData('CronExpression'));
     });
+
     this.cronFormType();
+    // React to subsequent nzType changes (replaces ngOnChanges)
+    effect(
+      () => {
+        this.nzType();
+        untracked(() => this.cronFormType());
+      },
+      { injector: this.injector }
+    );
+
     this.previewDate(this.form.value);
 
     this.form.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(value => {
+      this.cronValue.set(value as Cron);
       this.onChange(Object.values(value).join(' '));
       this.previewDate(value);
-      this.cdr.markForCheck();
     });
   }
 
-  ngOnChanges(changes: SimpleChanges): void {
-    const { nzType } = changes;
-
-    if (nzType) {
-      this.labels = labelsOfType(this.nzType);
-      this.cronFormType();
-    }
-  }
-
   private cronFormType(): void {
-    if (this.nzType === 'spring') {
+    if (this.nzType() === 'spring') {
       this.form.controls.second.enable();
     } else {
       this.form.controls.second.disable();
@@ -241,44 +249,42 @@ export class NzCronExpressionComponent implements OnInit, OnChanges, ControlValu
   previewDate(value: Cron): void {
     try {
       this.interval = CronExpressionParser.parse(Object.values(value).join(' '));
-      this.nextTimeList = [
+      this.nextTimeList.set([
         this.interval.next().toDate(),
         this.interval.next().toDate(),
         this.interval.next().toDate(),
         this.interval.next().toDate(),
         this.interval.next().toDate()
-      ];
+      ]);
     } catch {
       return;
     }
   }
 
   loadMorePreview(): void {
-    this.nextTimeList = [
-      ...this.nextTimeList,
+    this.nextTimeList.update(list => [
+      ...list,
       this.interval.next().toDate(),
       this.interval.next().toDate(),
       this.interval.next().toDate(),
       this.interval.next().toDate(),
       this.interval.next().toDate()
-    ];
-    this.cdr.markForCheck();
+    ]);
   }
 
   focusEffect(value: TimeType): void {
-    this.focus = true;
-    this.labelFocus = value;
-    this.cdr.markForCheck();
+    this.focus.set(true);
+    this.labelFocus.set(value);
   }
 
   blurEffect(): void {
-    this.focus = false;
-    this.labelFocus = null;
-    this.cdr.markForCheck();
+    this.focus.set(false);
+    this.labelFocus.set(null);
   }
 
   getValue(item: CronChangeType): void {
     this.form.controls[item.label].patchValue(item.value);
-    this.cdr.markForCheck();
   }
+
+  interval!: ReturnType<typeof CronExpressionParser.parse>;
 }

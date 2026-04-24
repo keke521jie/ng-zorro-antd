@@ -22,6 +22,7 @@ import {
   OnInit,
   Output,
   Renderer2,
+  signal,
   SimpleChanges,
   TemplateRef,
   ViewChild,
@@ -55,10 +56,10 @@ const NZ_CONFIG_MODULE_NAME: NzConfigKey = 'rate';
       (mouseleave)="onRateLeave(); $event.stopPropagation()"
       [tabindex]="nzDisabled ? -1 : 1"
     >
-      @for (star of starArray; track star) {
+      @for (star of starArray(); track star) {
         <li
           class="ant-rate-star"
-          [class]="starStyleArray[$index] || ''"
+          [class]="starStyleArray()[$index] || ''"
           nz-tooltip
           [nzTooltipTitle]="nzTooltips[$index]"
         >
@@ -107,8 +108,8 @@ export class NzRateComponent implements OnInit, ControlValueAccessor, OnChanges 
   @Output() readonly nzOnKeyDown = new EventEmitter<KeyboardEvent>();
 
   classMap: NgClassType = {};
-  starArray: number[] = [];
-  starStyleArray: NgClassType[] = [];
+  readonly starArray = signal<number[]>([]);
+  readonly starStyleArray = signal<NgClassType[]>([]);
   dir: Direction = 'ltr';
 
   private hasHalf = false;
@@ -250,31 +251,33 @@ export class NzRateComponent implements OnInit, ControlValueAccessor, OnChanges 
   }
 
   private updateStarArray(): void {
-    this.starArray = Array(this.nzCount)
-      .fill(0)
-      .map((_, i) => i);
-
+    this.starArray.set(
+      Array(this.nzCount)
+        .fill(0)
+        .map((_, i) => i)
+    );
     this.updateStarStyle();
   }
 
   private updateStarStyle(): void {
-    this.starStyleArray = this.starArray.map(i => {
-      const prefix = 'ant-rate-star';
-      const value = i + 1;
-      return {
-        [`${prefix}-full`]: value < this.hoverValue || (!this.hasHalf && value === this.hoverValue),
-        [`${prefix}-half`]: this.hasHalf && value === this.hoverValue,
-        [`${prefix}-active`]: this.hasHalf && value === this.hoverValue,
-        [`${prefix}-zero`]: value > this.hoverValue,
-        [`${prefix}-focused`]: this.hasHalf && value === this.hoverValue && this.isFocused
-      };
-    });
+    this.starStyleArray.set(
+      this.starArray().map(i => {
+        const prefix = 'ant-rate-star';
+        const value = i + 1;
+        return {
+          [`${prefix}-full`]: value < this.hoverValue || (!this.hasHalf && value === this.hoverValue),
+          [`${prefix}-half`]: this.hasHalf && value === this.hoverValue,
+          [`${prefix}-active`]: this.hasHalf && value === this.hoverValue,
+          [`${prefix}-zero`]: value > this.hoverValue,
+          [`${prefix}-focused`]: this.hasHalf && value === this.hoverValue && this.isFocused
+        };
+      })
+    );
   }
 
   writeValue(value: number | null): void {
     this.nzValue = value || 0;
     this.updateStarArray();
-    this.cdr.markForCheck();
   }
 
   setDisabledState(isDisabled: boolean): void {

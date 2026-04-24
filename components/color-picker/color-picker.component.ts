@@ -60,19 +60,19 @@ import { NzColor, NzColorPickerFormatType, NzColorPickerTriggerType, NzPresetCol
       (nzPopoverVisibleChange)="nzOnOpenChange.emit($event)"
     >
       @if (!nzFlipFlop) {
-        <nz-color-block [nzColor]="blockColor" [nzSize]="finalSize()" />
+        <nz-color-block [nzColor]="blockColor()" [nzSize]="finalSize()" />
       } @else {
         <ng-template [ngTemplateOutlet]="nzFlipFlop" />
       }
-      @if (nzShowText && !!showText && !nzFlipFlop) {
+      @if (nzShowText && !!showText() && !nzFlipFlop) {
         <div class="ant-color-picker-trigger-text">
-          {{ showText }}
+          {{ showText() }}
         </div>
       }
     </div>
     <ng-template #colorPicker>
       <ng-antd-color-picker
-        [value]="blockColor"
+        [value]="blockColor()"
         [defaultValue]="nzDefaultValue"
         [disabled]="nzDisabled"
         [panelRenderHeader]="nzPanelRenderHeader"
@@ -96,7 +96,7 @@ import { NzColor, NzColorPickerFormatType, NzColorPickerTriggerType, NzPresetCol
     </ng-template>
     <ng-template #nzPanelRenderFooter>
       <nz-color-format
-        [colorValue]="blockColor"
+        [colorValue]="blockColor()"
         [clearColor]="clearColor"
         [format]="nzFormat"
         [nzDisabledAlpha]="nzDisabledAlpha"
@@ -143,9 +143,9 @@ export class NzColorPickerComponent implements OnInit, OnChanges, ControlValueAc
   @Output() readonly nzOnOpenChange = new EventEmitter<boolean>();
 
   private isNzDisableFirstChange: boolean = true;
-  blockColor: string = '';
+  readonly blockColor = signal('');
   clearColor: boolean = false;
-  showText: string = defaultColor.toHexString();
+  readonly showText = signal(defaultColor.toHexString());
   formControl = this.formBuilder.control('');
   private readonly size = signal(this.nzSize);
 
@@ -186,9 +186,8 @@ export class NzColorPickerComponent implements OnInit, OnChanges, ControlValueAc
         } else if (this.nzFormat === 'rgb') {
           color = generateColor(value).toRgbString();
         }
-        this.showText = color;
+        this.showText.set(color);
         this.onChange(color);
-        this.cdr.markForCheck();
       }
     });
   }
@@ -211,19 +210,18 @@ export class NzColorPickerComponent implements OnInit, OnChanges, ControlValueAc
 
   getBlockColor(): void {
     if (this.nzValue) {
-      this.blockColor = generateColor(this.nzValue).toRgbString();
+      this.blockColor.set(generateColor(this.nzValue).toRgbString());
     } else if (this.nzDefaultValue) {
-      this.blockColor = generateColor(this.nzDefaultValue).toRgbString();
+      this.blockColor.set(generateColor(this.nzDefaultValue).toRgbString());
     } else {
-      this.blockColor = defaultColor.toHexString();
+      this.blockColor.set(defaultColor.toHexString());
     }
   }
 
   colorChange(value: { color: NzColor }): void {
-    this.blockColor = value.color.getAlpha() < 1 ? value.color.toHex8String() : value.color.toHexString();
+    this.blockColor.set(value.color.getAlpha() < 1 ? value.color.toHex8String() : value.color.toHexString());
     this.clearColor = false;
     this.nzOnChange.emit({ color: value.color, format: this.nzFormat ?? 'hex' });
-    this.cdr.markForCheck();
   }
 
   formatChange(value: { color: string; format: NzColorPickerFormatType }): void {
@@ -232,6 +230,5 @@ export class NzColorPickerComponent implements OnInit, OnChanges, ControlValueAc
     this.getBlockColor();
     this.nzOnChange.emit({ color: generateColor(value.color), format: value.format });
     this.formControl.patchValue(value.color);
-    this.cdr.markForCheck();
   }
 }

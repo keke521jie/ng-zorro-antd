@@ -69,8 +69,8 @@ import { NzExtendedMark, NzMarks, NzSliderHandler, NzSliderShowTooltip, NzSlider
     <nz-slider-track
       [vertical]="nzVertical"
       [included]="nzIncluded"
-      [offset]="track.offset!"
-      [length]="track.length!"
+      [offset]="track().offset!"
+      [length]="track().length!"
       [reverse]="nzReverse"
       [dir]="dir"
     />
@@ -79,14 +79,14 @@ import { NzExtendedMark, NzMarks, NzSliderHandler, NzSliderShowTooltip, NzSlider
         [vertical]="nzVertical"
         [min]="nzMin"
         [max]="nzMax"
-        [lowerBound]="$any(bounds.lower)"
-        [upperBound]="$any(bounds.upper)"
+        [lowerBound]="$any(bounds().lower)"
+        [upperBound]="$any(bounds().upper)"
         [marksArray]="marksArray"
         [included]="nzIncluded"
         [reverse]="nzReverse"
       />
     }
-    @for (handle of handles; track handle.value) {
+    @for (handle of handles(); track handle.value) {
       <nz-slider-handle
         [vertical]="nzVertical"
         [reverse]="nzReverse"
@@ -106,8 +106,8 @@ import { NzExtendedMark, NzMarks, NzSliderHandler, NzSliderShowTooltip, NzSlider
         [vertical]="nzVertical"
         [min]="nzMin"
         [max]="nzMax"
-        [lowerBound]="$any(bounds.lower)"
-        [upperBound]="$any(bounds.upper)"
+        [lowerBound]="$any(bounds().lower)"
+        [upperBound]="$any(bounds().upper)"
         [marksArray]="marksArray"
         [included]="nzIncluded"
         [reverse]="nzReverse"
@@ -154,10 +154,10 @@ export class NzSliderComponent implements ControlValueAccessor, OnInit, OnChange
   cacheSliderStart: number | null = null;
   cacheSliderLength: number | null = null;
   activeValueIndex: number | undefined = undefined; // Current activated handle's index ONLY for range=true
-  track: { offset: null | number; length: null | number } = { offset: null, length: null }; // Track's offset and length
-  handles: NzSliderHandler[] = []; // Handles' offset
+  readonly track = signal<{ offset: null | number; length: null | number }>({ offset: null, length: null });
+  readonly handles = signal<NzSliderHandler[]>([]);
   marksArray: NzExtendedMark[] | null = null; // "steps" in array type with more data & FILTER out the invalid mark
-  bounds: { lower: NzSliderValue | null; upper: NzSliderValue | null } = { lower: null, upper: null }; // now for nz-slider-step
+  readonly bounds = signal<{ lower: NzSliderValue | null; upper: NzSliderValue | null }>({ lower: null, upper: null });
   dir: Direction = 'ltr';
 
   readonly dragging = signal(false);
@@ -178,7 +178,7 @@ export class NzSliderComponent implements ControlValueAccessor, OnInit, OnChange
       this.onValueChange(this.getValue(true));
     });
 
-    this.handles = generateHandlers(this.nzRange ? 2 : 1);
+    this.handles.set(generateHandlers(this.nzRange ? 2 : 1));
     this.marksArray = this.nzMarks ? this.generateMarkItems(this.nzMarks) : null;
     this.bindDraggingHandlers();
     this.toggleDragDisabled(this.nzDisabled);
@@ -196,7 +196,7 @@ export class NzSliderComponent implements ControlValueAccessor, OnInit, OnChange
     } else if (nzMarks && !nzMarks.firstChange) {
       this.marksArray = this.nzMarks ? this.generateMarkItems(this.nzMarks) : null;
     } else if (nzRange && !nzRange.firstChange) {
-      this.handles = generateHandlers(nzRange.currentValue ? 2 : 1);
+      this.handles.set(generateHandlers(nzRange.currentValue ? 2 : 1));
       this.setValue(this.formatValue(null));
     }
   }
@@ -333,15 +333,16 @@ export class NzSliderComponent implements ControlValueAccessor, OnInit, OnChange
       ? [offsetSorted[0], offsetSorted[1] - offsetSorted[0]]
       : [0, offsetSorted];
 
-    this.handles.forEach((handle, index) => {
-      handle.offset = isValueRange(offset) ? offset[index] : offset;
-      handle.value = isValueRange(value) ? value[index] : value || 0;
-    });
+    this.handles.update(handles =>
+      handles.map((handle, index) => ({
+        ...handle,
+        offset: isValueRange(offset) ? (offset as number[])[index] : (offset as number),
+        value: isValueRange(value) ? (value as number[])[index] : value || 0
+      }))
+    );
 
-    [this.bounds.lower, this.bounds.upper] = boundParts;
-    [this.track.offset, this.track.length] = trackParts;
-
-    this.cdr.markForCheck();
+    this.bounds.set({ lower: boundParts[0], upper: boundParts[1] });
+    this.track.set({ offset: trackParts[0], length: trackParts[1] });
   }
 
   private onDragStart(value: number): void {
@@ -354,7 +355,6 @@ export class NzSliderComponent implements ControlValueAccessor, OnInit, OnChange
 
   private onDragMove(value: number): void {
     this.setActiveValue(this.getLogicalValue(value));
-    this.cdr.markForCheck();
   }
 
   private getLogicalValue(value: number): number {
@@ -549,11 +549,11 @@ export class NzSliderComponent implements ControlValueAccessor, OnInit, OnChange
    * Show one handle's tooltip and hide others'.
    */
   private showHandleTooltip(handleIndex: number = 0): void {
-    this.handles.forEach((handle, index) => (handle.active = index === handleIndex));
+    this.handles.update(handles => handles.map((h, i) => ({ ...h, active: i === handleIndex })));
   }
 
   private hideAllHandleTooltip(): void {
-    this.handles.forEach(handle => (handle.active = false));
+    this.handles.update(handles => handles.map(h => ({ ...h, active: false })));
   }
 
   private generateMarkItems(marks: NzMarks): NzExtendedMark[] | null {

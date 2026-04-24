@@ -20,7 +20,7 @@ describe('NzInputOtpComponent', () => {
   beforeEach(() => {
     fixture = TestBed.createComponent(NzInputOtpComponent);
     component = fixture.componentInstance;
-    component.nzLength = 6;
+    fixture.componentRef.setInput('nzLength', 6);
     fixture.detectChanges();
 
     inputElements = fixture.debugElement.queryAll(By.css('.ant-otp-input'));
@@ -36,7 +36,7 @@ describe('NzInputOtpComponent', () => {
   });
 
   it('should format the value on input using nzFormatter', () => {
-    component.nzFormatter = value => value.toUpperCase();
+    fixture.componentRef.setInput('nzFormatter', (value: string) => value.toUpperCase());
     inputElements[0].nativeElement.value = 'a';
     inputElements[0].triggerEventHandler('input', { target: inputElements[0].nativeElement });
 
@@ -45,13 +45,13 @@ describe('NzInputOtpComponent', () => {
   });
 
   it('should apply nzMask if defined', () => {
-    component.nzMask = '*';
+    fixture.componentRef.setInput('nzMask', '*');
     inputElements[0].nativeElement.value = '1';
     inputElements[0].triggerEventHandler('input', { target: inputElements[0].nativeElement });
 
     fixture.detectChanges();
     expect(component['otpArray'].at(0).value).toBe('*');
-    expect(component['internalValue'][0]).toBe('1');
+    expect(component['internalValue']()[0]).toBe('1');
   });
 
   it('should focus on the next input after input is entered', () => {
@@ -97,7 +97,7 @@ describe('NzInputOtpComponent', () => {
   });
 
   it('should update internal value correctly on paste event with nzMask', () => {
-    component.nzMask = '*';
+    fixture.componentRef.setInput('nzMask', '*');
     const event = new ClipboardEvent('paste', {
       clipboardData: new DataTransfer()
     });
@@ -109,11 +109,11 @@ describe('NzInputOtpComponent', () => {
 
     expect(event.preventDefault).toHaveBeenCalled();
     expect(component['otpArray'].at(0).value).toBe('*');
-    expect(component['internalValue'][0]).toBe('7');
+    expect(component['internalValue']()[0]).toBe('7');
     expect(component['otpArray'].at(1).value).toBe('*');
-    expect(component['internalValue'][1]).toBe('8');
+    expect(component['internalValue']()[1]).toBe('8');
     expect(component['otpArray'].at(2).value).toBe('*');
-    expect(component['internalValue'][2]).toBe('9');
+    expect(component['internalValue']()[2]).toBe('9');
   });
 
   it('should disable all inputs when setDisabledState is called with true', () => {
@@ -126,19 +126,10 @@ describe('NzInputOtpComponent', () => {
   });
 
   it('should recreate form array when nzLength changes', () => {
-    component.nzLength = 6;
-    component['createFormArray']();
     const initialFormArray = component['otpArray'];
 
-    component.nzLength = 8;
-    component.ngOnChanges({
-      nzLength: {
-        currentValue: 8,
-        previousValue: 6,
-        firstChange: false,
-        isFirstChange: () => false
-      }
-    });
+    fixture.componentRef.setInput('nzLength', 8);
+    fixture.detectChanges();
 
     expect(component['otpArray']).not.toBe(initialFormArray);
     expect(component['otpArray'].length).toBe(8);
@@ -149,15 +140,8 @@ describe('NzInputOtpComponent', () => {
     const spy = spyOn(component['otpArray'], 'disable').and.callThrough();
     const enableSpy = spyOn(component['otpArray'], 'enable').and.callThrough();
 
-    component.disabled = true;
-    component.ngOnChanges({
-      disabled: {
-        currentValue: true,
-        previousValue: false,
-        firstChange: false,
-        isFirstChange: () => false
-      }
-    });
+    fixture.componentRef.setInput('disabled', true);
+    fixture.detectChanges();
 
     expect(spy).toHaveBeenCalled();
     expect(enableSpy).not.toHaveBeenCalled();
@@ -172,7 +156,7 @@ describe('NzInputOtpComponent', () => {
   });
 
   it('should set formatted values correctly in the form array', () => {
-    component.nzFormatter = value => value.toUpperCase();
+    fixture.componentRef.setInput('nzFormatter', (value: string) => value.toUpperCase());
     component['createFormArray']();
 
     component.writeValue('abcd');
@@ -221,7 +205,7 @@ describe('NzInputOtpComponent', () => {
   });
 
   it('should call onChangeCallback with the joined internalValue', () => {
-    component['internalValue'] = ['1', '2', '3', '4', '5', '6'];
+    component['internalValue'].set(['1', '2', '3', '4', '5', '6']);
     const callback = jasmine.createSpy('onChangeCallback');
     component['onChangeCallback'] = callback;
 

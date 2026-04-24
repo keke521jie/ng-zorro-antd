@@ -60,7 +60,7 @@ const NZ_CONFIG_MODULE_NAME: NzConfigKey = 'switch';
       #switchElement
       [attr.id]="nzId"
       [disabled]="nzDisabled"
-      [class.ant-switch-checked]="isChecked"
+      [class.ant-switch-checked]="isChecked()"
       [class.ant-switch-loading]="nzLoading"
       [class.ant-switch-disabled]="nzDisabled"
       [class.ant-switch-small]="finalSize() === 'small'"
@@ -73,7 +73,7 @@ const NZ_CONFIG_MODULE_NAME: NzConfigKey = 'switch';
         }
       </span>
       <span class="ant-switch-inner">
-        @if (isChecked) {
+        @if (isChecked()) {
           <ng-container *nzStringTemplateOutlet="nzCheckedChildren">{{ nzCheckedChildren }}</ng-container>
         } @else {
           <ng-container *nzStringTemplateOutlet="nzUnCheckedChildren">{{ nzUnCheckedChildren }}</ng-container>
@@ -94,7 +94,7 @@ export class NzSwitchComponent implements ControlValueAccessor, AfterViewInit, O
   private focusMonitor = inject(FocusMonitor);
   private destroyRef = inject(DestroyRef);
 
-  isChecked = false;
+  isChecked = signal(false);
   onChange: OnChangeType = () => {};
   onTouched: OnTouchedType = () => {};
   @ViewChild('switchElement', { static: true }) switchElement!: ElementRef<HTMLElement>;
@@ -117,9 +117,9 @@ export class NzSwitchComponent implements ControlValueAccessor, AfterViewInit, O
   protected readonly finalSize = computed(() => this.formSize?.() || this.size());
 
   updateValue(value: boolean): void {
-    if (this.isChecked !== value) {
-      this.isChecked = value;
-      this.onChange(this.isChecked);
+    if (this.isChecked() !== value) {
+      this.isChecked.set(value);
+      this.onChange(value);
     }
   }
 
@@ -155,7 +155,7 @@ export class NzSwitchComponent implements ControlValueAccessor, AfterViewInit, O
         }
 
         this.ngZone.run(() => {
-          this.updateValue(!this.isChecked);
+          this.updateValue(!this.isChecked());
           this.cdr.markForCheck();
         });
       });
@@ -180,7 +180,7 @@ export class NzSwitchComponent implements ControlValueAccessor, AfterViewInit, O
           } else if (keyCode === RIGHT_ARROW) {
             this.updateValue(true);
           } else if (keyCode === SPACE || keyCode === ENTER) {
-            this.updateValue(!this.isChecked);
+            this.updateValue(!this.isChecked());
           }
 
           this.cdr.markForCheck();
@@ -201,8 +201,7 @@ export class NzSwitchComponent implements ControlValueAccessor, AfterViewInit, O
   }
 
   writeValue(value: boolean): void {
-    this.isChecked = value;
-    this.cdr.markForCheck();
+    this.isChecked.set(value);
   }
 
   registerOnChange(fn: OnChangeType): void {

@@ -214,9 +214,23 @@ export class NzTimePickerComponent implements ControlValueAccessor, OnInit, Afte
 
   isInit = false;
   focused = false;
-  inputValue: string = '';
-  value: Date | null = null;
   preValue: Date | null = null;
+
+  private readonly _value = signal<Date | null>(null);
+  get value(): Date | null {
+    return this._value();
+  }
+  set value(v: Date | null) {
+    this._value.set(v);
+  }
+
+  private readonly _inputValue = signal('');
+  get inputValue(): string {
+    return this._inputValue();
+  }
+  set inputValue(v: string) {
+    this._inputValue.set(v);
+  }
   inputSize?: number;
   i18nPlaceHolder$: Observable<string | undefined> = of(undefined);
 
@@ -294,7 +308,6 @@ export class NzTimePickerComponent implements ControlValueAccessor, OnInit, Afte
     }
     this.value = isValid(value) ? new Date(value!) : null;
     this.inputValue = this.dateHelper.format(value, this.nzFormat);
-    this.cdr.markForCheck();
   }
 
   open(): void {

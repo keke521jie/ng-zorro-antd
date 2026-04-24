@@ -161,7 +161,7 @@ const defaultDisplayRender = (labels: string[]): string => labels.join(' / ');
             @if (showLabelRender) {
               <nz-select-item
                 [disabled]="nzDisabled"
-                [label]="labelRenderText"
+                [label]="labelRenderText()"
                 [contentTemplateOutlet]="isLabelRenderTemplate ? nzLabelRender : null"
                 [contentTemplateOutletContext]="labelRenderContext"
               />
@@ -434,7 +434,7 @@ export class NzCascaderComponent
   el: HTMLElement = this.elementRef.nativeElement;
   readonly menuVisible = signal(false);
   isLoading = false;
-  labelRenderText?: string;
+  readonly labelRenderText = signal<string | undefined>(undefined);
   labelRenderContext = {};
   onChange = Function.prototype;
   onTouched = Function.prototype;
@@ -480,7 +480,10 @@ export class NzCascaderComponent
   private delayMenuTimer?: ReturnType<typeof setTimeout>;
   private delaySelectTimer?: ReturnType<typeof setTimeout>;
   private isNzDisableFirstChange: boolean = true;
-  selectedNodes: NzTreeNode[] = [];
+  private readonly _selectedNodes = signal<NzTreeNode[]>([]);
+  get selectedNodes(): NzTreeNode[] {
+    return this._selectedNodes();
+  }
 
   get inSearchingMode(): boolean {
     return this.cascaderService.inSearchingMode;
@@ -661,7 +664,7 @@ export class NzCascaderComponent
     } else {
       this.cascaderService.values = [];
       this.clearSelectedNodes();
-      this.selectedNodes = [];
+      this._selectedNodes.set([]);
       this.cascaderService.$redraw.next();
     }
   }
@@ -728,7 +731,7 @@ export class NzCascaderComponent
     }
 
     this.clearSelectedNodes();
-    this.labelRenderText = '';
+    this.labelRenderText.set('');
     this.labelRenderContext = {};
     this.inputValue = '';
     if (!this.openControlled) {
@@ -868,8 +871,8 @@ export class NzCascaderComponent
      * @param shouldUpdateValue if false, only update selected nodes
      */
     const updateNodesAndValue = (shouldUpdateValue: boolean): void => {
-      this.selectedNodes = [...(this.nzMultiple ? this.getCheckedNodeList() : this.getSelectedNodeList())].sort(
-        (a, b) => {
+      this._selectedNodes.set(
+        [...(this.nzMultiple ? this.getCheckedNodeList() : this.getSelectedNodeList())].sort((a, b) => {
           const indexA = value.indexOf(a.key);
           const indexB = value.indexOf(b.key);
           if (indexA !== -1 && indexB !== -1) {
@@ -882,7 +885,7 @@ export class NzCascaderComponent
             return 1;
           }
           return 0;
-        }
+        })
       );
       if (shouldUpdateValue) {
         this.cascaderService.values = this.selectedNodes.map(node =>
@@ -1185,7 +1188,7 @@ export class NzCascaderComponent
     if (this.isLabelRenderTemplate) {
       this.labelRenderContext = { labels, selectedOptions };
     }
-    this.labelRenderText = defaultDisplayRender.call(this, labels);
+    this.labelRenderText.set(defaultDisplayRender.call(this, labels));
   }
 
   private setDropdownStyles(): void {

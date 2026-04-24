@@ -123,7 +123,7 @@ describe('calendar', () => {
 
       const calendar = fixture.debugElement.queryAll(By.directive(Calendar))[1].injector.get(Calendar);
 
-      expect(calendar.activeDate.nativeDate).toBe(component.date0);
+      expect(calendar.activeDate().nativeDate).toBe(component.date0);
 
       calendar.onDateSelect(new CandyDate(now));
       fixture.detectChanges();
@@ -142,7 +142,7 @@ describe('calendar', () => {
       flush();
       fixture.detectChanges();
 
-      expect(calendar.activeDate.nativeDate).toBe(component.date1);
+      expect(calendar.activeDate().nativeDate).toBe(component.date1);
 
       model.viewToModelUpdate(now);
       fixture.detectChanges();

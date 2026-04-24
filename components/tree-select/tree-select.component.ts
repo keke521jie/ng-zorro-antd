@@ -181,7 +181,7 @@ const listOfPositions = [
       <span class="ant-select-selection-wrap">
         @if (isMultiple) {
           <div class="ant-select-selection-overflow">
-            @for (node of selectedNodes | slice: 0 : nzMaxTagCount; track node.key) {
+            @for (node of selectedNodes() | slice: 0 : nzMaxTagCount; track node.key) {
               <div class="ant-select-selection-overflow-item">
                 <nz-select-item
                   deletable
@@ -192,12 +192,12 @@ const listOfPositions = [
                 />
               </div>
             }
-            @if (selectedNodes.length > nzMaxTagCount) {
+            @if (selectedNodes().length > nzMaxTagCount) {
               <div class="ant-select-selection-overflow-item">
                 <nz-select-item
                   [contentTemplateOutlet]="nzMaxTagPlaceholder"
-                  [contentTemplateOutletContext]="selectedNodes | slice: nzMaxTagCount"
-                  [label]="'+ ' + (selectedNodes.length - nzMaxTagCount) + ' ...'"
+                  [contentTemplateOutletContext]="selectedNodes() | slice: nzMaxTagCount"
+                  [label]="'+ ' + (selectedNodes().length - nzMaxTagCount) + ' ...'"
                 />
               </div>
             }
@@ -227,12 +227,12 @@ const listOfPositions = [
             [disabled]="nzDisabled"
             [focusTrigger]="nzOpen"
           />
-          @if (selectedNodes.length === 1 && !isComposing && inputValue === '') {
-            <nz-select-item [label]="nzDisplayWith(selectedNodes[0])" displayLabelInHtml />
+          @if (selectedNodes().length === 1 && !isComposing && inputValue === '') {
+            <nz-select-item [label]="nzDisplayWith(selectedNodes()[0])" displayLabelInHtml />
           }
         }
 
-        @if (nzPlaceHolder && selectedNodes.length === 0) {
+        @if (nzPlaceHolder && selectedNodes().length === 0) {
           <nz-select-placeholder [placeholder]="nzPlaceHolder" [style.display]="placeHolderDisplay" />
         }
       </span>
@@ -250,7 +250,7 @@ const listOfPositions = [
         </ng-template>
       </nz-select-arrow>
 
-      @if (nzAllowClear && !nzDisabled && selectedNodes.length) {
+      @if (nzAllowClear && !nzDisabled && selectedNodes().length) {
         <nz-select-clear (clear)="onClearSelection()" />
       }
     </div>
@@ -378,9 +378,15 @@ export class NzTreeSelectComponent extends NzTreeBase implements ControlValueAcc
   focused = false;
   inputValue = '';
   dropdownPosition: 'top' | 'center' | 'bottom' = 'bottom';
-  selectedNodes: NzTreeNode[] = [];
+  readonly selectedNodes = signal<NzTreeNode[]>([]);
   expandedKeys: string[] = [];
-  value: string[] = [];
+  private readonly _value = signal<string[]>([]);
+  get value(): string[] {
+    return this._value();
+  }
+  set value(v: string[]) {
+    this._value.set(v);
+  }
   protected readonly dir = inject(Directionality).valueSignal;
   positions: ConnectionPositionPair[] = [];
 
@@ -411,7 +417,7 @@ export class NzTreeSelectComponent extends NzTreeBase implements ControlValueAcc
   onTouched: OnTouchedType = () => {};
 
   get placeHolderDisplay(): string {
-    return this.inputValue || this.isComposing || this.selectedNodes.length ? 'none' : 'block';
+    return this.inputValue || this.isComposing || this.selectedNodes().length ? 'none' : 'block';
   }
 
   get isMultiple(): boolean {
@@ -458,11 +464,13 @@ export class NzTreeSelectComponent extends NzTreeBase implements ControlValueAcc
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(focusOrigin => {
         if (!focusOrigin) {
+          if (this.focused) {
+            Promise.resolve().then(() => {
+              this.onTouched();
+            });
+          }
           this.focused = false;
           this.cdr.markForCheck();
-          Promise.resolve().then(() => {
-            this.onTouched();
-          });
         } else {
           this.focused = true;
           this.cdr.markForCheck();
@@ -545,9 +553,8 @@ export class NzTreeSelectComponent extends NzTreeBase implements ControlValueAcc
     } else {
       this.value = [];
       this.clearSelectedNodes();
-      this.selectedNodes = [];
+      this.selectedNodes.set([]);
     }
-    this.cdr.markForCheck();
   }
 
   registerOnChange(fn: (_: string[] | string | null) => void): void {
@@ -598,7 +605,9 @@ export class NzTreeSelectComponent extends NzTreeBase implements ControlValueAcc
   }
 
   closeDropdown(): void {
-    Promise.resolve().then(() => this.onTouched());
+    if (this.focused) {
+      Promise.resolve().then(() => this.onTouched());
+    }
     this.nzOpen = false;
     this.inputValue = '';
     this.isNotFound = false;
@@ -611,8 +620,8 @@ export class NzTreeSelectComponent extends NzTreeBase implements ControlValueAcc
     const eventTarget = e.target as HTMLInputElement;
     if (this.isMultiple && !eventTarget.value && keyCode === BACKSPACE) {
       e.preventDefault();
-      if (this.selectedNodes.length) {
-        const removeNode = this.selectedNodes[this.selectedNodes.length - 1];
+      if (this.selectedNodes().length) {
+        const removeNode = this.selectedNodes()[this.selectedNodes().length - 1];
         if (removeNode && !removeNode.isDisabled) {
           this.removeSelected(removeNode);
         }
@@ -677,7 +686,7 @@ export class NzTreeSelectComponent extends NzTreeBase implements ControlValueAcc
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.updateSelectedNodes();
-        const value = this.selectedNodes.map(node => node.key!);
+        const value = this.selectedNodes().map(node => node.key!);
         this.value = [...value];
         if (this.nzShowSearch || this.isMultiple) {
           this.inputValue = '';
@@ -707,8 +716,8 @@ export class NzTreeSelectComponent extends NzTreeBase implements ControlValueAcc
       }
     }
 
-    this.selectedNodes = [...(this.nzCheckable ? this.getCheckedNodeList() : this.getSelectedNodeList())].sort(
-      (a, b) => {
+    this.selectedNodes.set(
+      [...(this.nzCheckable ? this.getCheckedNodeList() : this.getSelectedNodeList())].sort((a, b) => {
         const indexA = this.value.indexOf(a.key);
         const indexB = this.value.indexOf(b.key);
         if (indexA !== -1 && indexB !== -1) {
@@ -721,7 +730,7 @@ export class NzTreeSelectComponent extends NzTreeBase implements ControlValueAcc
           return 1;
         }
         return 0;
-      }
+      })
     );
   }
 
@@ -736,7 +745,7 @@ export class NzTreeSelectComponent extends NzTreeBase implements ControlValueAcc
   }
 
   onClearSelection(): void {
-    this.selectedNodes.forEach(node => {
+    this.selectedNodes().forEach(node => {
       this.removeSelected(node, false);
     });
     this.nzCleared.emit();
@@ -762,7 +771,7 @@ export class NzTreeSelectComponent extends NzTreeBase implements ControlValueAcc
   }
 
   clearSelectedNodes(): void {
-    this.selectedNodes.forEach(node => {
+    this.selectedNodes().forEach(node => {
       this.removeSelected(node, false);
     });
   }

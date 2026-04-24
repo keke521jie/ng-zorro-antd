@@ -191,8 +191,8 @@ describe('tree', () => {
             expect(component.treeComponent.getMatchedNodeList().length)
               .withContext('treeComponent.getMatchedNodeList().length')
               .toBe(then.matchedNodeList);
-            expect(component.treeComponent.nzFlattenNodes.length)
-              .withContext('treeComponent.nzFlattenNodes.length')
+            expect(component.treeComponent.nzFlattenNodes().length)
+              .withContext('treeComponent.nzFlattenNodes().length')
               .toBe(then.nzFlattenNodes);
             expect(nativeElement.querySelectorAll('nz-tree-node').length)
               .withContext('number of displayed nz-tree-node elements')

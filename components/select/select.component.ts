@@ -145,7 +145,7 @@ export type NzSelectSizeType = NzSizeLDSType;
         [suffixIcon]="nzSuffixIcon"
         [feedbackIcon]="feedbackIconTpl"
         [nzMaxMultipleCount]="nzMaxMultipleCount"
-        [listOfValue]="listOfValue"
+        [listOfValue]="listOfValue()"
         [isMaxMultipleCountSet]="isMaxMultipleCountSet"
       >
         <ng-template #feedbackIconTpl>
@@ -156,7 +156,7 @@ export type NzSelectSizeType = NzSizeLDSType;
       </nz-select-arrow>
     }
 
-    @if (nzAllowClear && !nzDisabled && listOfValue.length) {
+    @if (nzAllowClear && !nzDisabled && listOfValue().length) {
       <nz-select-clear [clearIcon]="nzClearIcon" (clear)="onClearSelection()" />
     }
     <ng-template
@@ -190,7 +190,7 @@ export type NzSelectSizeType = NzSizeLDSType;
         [menuItemSelectedIcon]="nzMenuItemSelectedIcon"
         [notFoundContent]="nzNotFoundContent"
         [activatedValue]="activatedValue"
-        [listOfSelectedValue]="listOfValue"
+        [listOfSelectedValue]="listOfValue()"
         [dropdownRender]="nzDropdownRender"
         [compareWith]="compareWith"
         [mode]="nzMode"
@@ -301,7 +301,7 @@ export class NzSelectComponent implements ControlValueAccessor, OnInit, AfterCon
   }
 
   get isMaxMultipleCountReached(): boolean {
-    return this.nzMaxMultipleCount !== Infinity && this.listOfValue.length === this.nzMaxMultipleCount;
+    return this.nzMaxMultipleCount !== Infinity && this.listOfValue().length === this.nzMaxMultipleCount;
   }
 
   @Output() readonly nzOnSearch = new EventEmitter<string>();
@@ -352,7 +352,7 @@ export class NzSelectComponent implements ControlValueAccessor, OnInit, AfterCon
   listOfContainerItem: NzSelectItemInterface[] = [];
   listOfTopItem: NzSelectItemInterface[] = [];
   activatedValue: NzSafeAny | null = null;
-  listOfValue: NzSafeAny[] = [];
+  readonly listOfValue = signal<NzSafeAny[]>([]);
   focused = false;
   protected readonly dir = inject(Directionality).valueSignal;
   positions: ConnectionPositionPair[] = [];
@@ -377,17 +377,17 @@ export class NzSelectComponent implements ControlValueAccessor, OnInit, AfterCon
   onItemClick(value: NzSafeAny): void {
     this.activatedValue = value;
     if (this.nzMode === 'default') {
-      if (this.listOfValue.length === 0 || !this.compareWith(this.listOfValue[0], value)) {
+      if (this.listOfValue().length === 0 || !this.compareWith(this.listOfValue()[0], value)) {
         this.updateListOfValue([value]);
       }
       this.setOpenState(false);
     } else {
-      const targetIndex = this.listOfValue.findIndex(o => this.compareWith(o, value));
+      const targetIndex = this.listOfValue().findIndex(o => this.compareWith(o, value));
       if (targetIndex !== -1) {
-        const listOfValueAfterRemoved = this.listOfValue.filter((_, i) => i !== targetIndex);
+        const listOfValueAfterRemoved = this.listOfValue().filter((_, i) => i !== targetIndex);
         this.updateListOfValue(listOfValueAfterRemoved);
-      } else if (this.listOfValue.length < this.nzMaxMultipleCount) {
-        const listOfValueAfterAdded = [...this.listOfValue, value];
+      } else if (this.listOfValue().length < this.nzMaxMultipleCount) {
+        const listOfValueAfterAdded = [...this.listOfValue(), value];
         this.updateListOfValue(listOfValueAfterAdded);
       }
       this.focus();
@@ -398,7 +398,7 @@ export class NzSelectComponent implements ControlValueAccessor, OnInit, AfterCon
   }
 
   onItemDelete(item: NzSelectItemInterface): void {
-    const listOfSelectedValue = this.listOfValue.filter(v => !this.compareWith(v, item.nzValue));
+    const listOfSelectedValue = this.listOfValue().filter(v => !this.compareWith(v, item.nzValue));
     this.updateListOfValue(listOfSelectedValue);
     this.clearInput();
   }
@@ -426,7 +426,7 @@ export class NzSelectComponent implements ControlValueAccessor, OnInit, AfterCon
     const activatedItem =
       listOfContainerItem.find(item => item.nzLabel === this.searchValue) ||
       listOfContainerItem.find(item => this.compareWith(item.nzValue, this.activatedValue)) ||
-      listOfContainerItem.find(item => this.compareWith(item.nzValue, this.listOfValue[0])) ||
+      listOfContainerItem.find(item => this.compareWith(item.nzValue, this.listOfValue()[0])) ||
       listOfContainerItem[0];
     this.activatedValue = (activatedItem && activatedItem.nzValue) || null;
     let listOfGroupLabel: Array<string | number | TemplateRef<NzSafeAny> | null> = [];
@@ -467,7 +467,7 @@ export class NzSelectComponent implements ControlValueAccessor, OnInit, AfterCon
     };
     const model = covertListToModel(listOfValue, this.nzMode);
     if (this.value !== model) {
-      this.listOfValue = listOfValue;
+      this.listOfValue.set(listOfValue);
       this.listOfValue$.next(listOfValue);
       this.value = model;
       this.onChange(this.value);
@@ -478,7 +478,7 @@ export class NzSelectComponent implements ControlValueAccessor, OnInit, AfterCon
     const listOfMatchedValue = this.listOfTagAndTemplateItem
       .filter(item => listOfLabel.findIndex(label => label === item.nzLabel) !== -1)
       .map(item => item.nzValue)
-      .filter(item => this.listOfValue.findIndex(v => this.compareWith(v, item)) === -1);
+      .filter(item => this.listOfValue().findIndex(v => this.compareWith(v, item)) === -1);
     /**
      * Limit the number of selected items to nzMaxMultipleCount
      */
@@ -486,13 +486,13 @@ export class NzSelectComponent implements ControlValueAccessor, OnInit, AfterCon
       this.isMaxMultipleCountSet ? value.slice(0, this.nzMaxMultipleCount) : value;
 
     if (this.nzMode === 'multiple') {
-      const updateValue = limitWithinMaxCount([...this.listOfValue, ...listOfMatchedValue]);
+      const updateValue = limitWithinMaxCount([...this.listOfValue(), ...listOfMatchedValue]);
       this.updateListOfValue(updateValue);
     } else if (this.nzMode === 'tags') {
       const listOfUnMatchedLabel = listOfLabel.filter(
         label => this.listOfTagAndTemplateItem.findIndex(item => item.nzLabel === label) === -1
       );
-      const updateValue = limitWithinMaxCount([...this.listOfValue, ...listOfMatchedValue, ...listOfUnMatchedLabel]);
+      const updateValue = limitWithinMaxCount([...this.listOfValue(), ...listOfMatchedValue, ...listOfUnMatchedLabel]);
       this.updateListOfValue(updateValue);
     }
     this.clearInput();
@@ -663,9 +663,8 @@ export class NzSelectComponent implements ControlValueAccessor, OnInit, AfterCon
         }
       };
       const listOfValue = covertModelToList(modelValue, this.nzMode);
-      this.listOfValue = listOfValue;
+      this.listOfValue.set(listOfValue);
       this.listOfValue$.next(listOfValue);
-      this.cdr.markForCheck();
     }
   }
 
@@ -752,12 +751,14 @@ export class NzSelectComponent implements ControlValueAccessor, OnInit, AfterCon
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(focusOrigin => {
         if (!focusOrigin) {
+          if (this.focused) {
+            Promise.resolve().then(() => {
+              this.onTouched();
+            });
+          }
           this.focused = false;
           this.cdr.markForCheck();
           this.nzBlur.emit();
-          Promise.resolve().then(() => {
-            this.onTouched();
-          });
         } else {
           this.focused = true;
           this.cdr.markForCheck();
@@ -774,7 +775,7 @@ export class NzSelectComponent implements ControlValueAccessor, OnInit, AfterCon
             value => this.listOfTopItem.find(o => this.compareWith(o.nzValue, value)) || this.generateTagItem(value)
           );
         this.listOfTagAndTemplateItem = [...listOfTemplateItem, ...listOfTagItem];
-        this.listOfTopItem = this.listOfValue
+        this.listOfTopItem = this.listOfValue()
           .map(
             v =>
               [...this.listOfTagAndTemplateItem, ...this.listOfTopItem].find(item => this.compareWith(v, item.nzValue))!

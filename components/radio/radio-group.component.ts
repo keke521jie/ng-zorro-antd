@@ -101,7 +101,6 @@ export class NzRadioGroupComponent implements OnInit, ControlValueAccessor, OnCh
   writeValue(value: NzSafeAny): void {
     this.value = value;
     this.nzRadioService.select(value);
-    this.cdr.markForCheck();
   }
 
   registerOnChange(fn: OnChangeType): void {

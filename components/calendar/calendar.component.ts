@@ -6,9 +6,9 @@
 import { Direction, Directionality } from '@angular/cdk/bidi';
 import {
   ChangeDetectionStrategy,
-  ChangeDetectorRef,
   Component,
   ContentChild,
+  DestroyRef,
   EventEmitter,
   Input,
   OnChanges,
@@ -20,7 +20,7 @@ import {
   booleanAttribute,
   forwardRef,
   inject,
-  DestroyRef
+  signal
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
@@ -47,7 +47,7 @@ type NzCalendarDateTemplate = TemplateRef<{ $implicit: Date }>;
   template: `
     <nz-calendar-header
       [fullscreen]="nzFullscreen"
-      [activeDate]="activeDate"
+      [activeDate]="activeDate()"
       [nzCustomHeader]="nzCustomHeader"
       [(mode)]="nzMode"
       (modeChange)="onModeChange($event)"
@@ -62,8 +62,8 @@ type NzCalendarDateTemplate = TemplateRef<{ $implicit: Date }>;
             <!--  TODO(@wenqi73) [cellRender] [fullCellRender] -->
             <date-table
               [prefixCls]="prefixCls"
-              [value]="activeDate"
-              [activeDate]="activeDate"
+              [value]="activeDate()"
+              [activeDate]="activeDate()"
               [cellRender]="$any(dateCell)"
               [fullCellRender]="$any(dateFullCell)"
               [disabledDate]="nzDisabledDate"
@@ -72,8 +72,8 @@ type NzCalendarDateTemplate = TemplateRef<{ $implicit: Date }>;
           } @else {
             <month-table
               [prefixCls]="prefixCls"
-              [value]="activeDate"
-              [activeDate]="activeDate"
+              [value]="activeDate()"
+              [activeDate]="activeDate()"
               [cellRender]="$any(monthCell)"
               [fullCellRender]="$any(monthFullCell)"
               (valueChange)="onDateSelect($event)"
@@ -93,11 +93,10 @@ type NzCalendarDateTemplate = TemplateRef<{ $implicit: Date }>;
   imports: [NzCalendarHeaderComponent, LibPackerModule]
 })
 export class NzCalendarComponent implements ControlValueAccessor, OnChanges, OnInit {
-  private cdr = inject(ChangeDetectorRef);
   private directionality = inject(Directionality);
   private destroyRef = inject(DestroyRef);
 
-  activeDate: CandyDate = new CandyDate();
+  readonly activeDate = signal<CandyDate>(new CandyDate());
   prefixCls: string = 'ant-picker-calendar';
   dir: Direction = 'ltr';
 
@@ -155,16 +154,16 @@ export class NzCalendarComponent implements ControlValueAccessor, OnChanges, OnI
 
   onModeChange(mode: NzCalendarMode): void {
     this.nzModeChange.emit(mode);
-    this.nzPanelChange.emit({ date: this.activeDate.nativeDate, mode });
+    this.nzPanelChange.emit({ date: this.activeDate().nativeDate, mode });
   }
 
   onYearSelect(year: number): void {
-    const date = this.activeDate.setYear(year);
+    const date = this.activeDate().setYear(year);
     this.updateDate(date);
   }
 
   onMonthSelect(month: number): void {
-    const date = this.activeDate.setMonth(month);
+    const date = this.activeDate().setMonth(month);
     this.updateDate(date);
   }
 
@@ -176,7 +175,6 @@ export class NzCalendarComponent implements ControlValueAccessor, OnChanges, OnI
 
   writeValue(value: Date | null): void {
     this.updateDate(new CandyDate(value as Date), false);
-    this.cdr.markForCheck();
   }
 
   registerOnChange(fn: (date: Date) => void): void {
@@ -188,7 +186,7 @@ export class NzCalendarComponent implements ControlValueAccessor, OnChanges, OnI
   }
 
   private updateDate(date: CandyDate, touched: boolean = true): void {
-    this.activeDate = date;
+    this.activeDate.set(date);
 
     if (touched) {
       this.onChangeFn(date.nativeDate);

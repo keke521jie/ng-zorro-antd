@@ -7,9 +7,9 @@ import { Directionality } from '@angular/cdk/bidi';
 import { CdkFixedSizeVirtualScroll, CdkVirtualForOf, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import {
   ChangeDetectionStrategy,
-  ChangeDetectorRef,
   Component,
   ContentChild,
+  DestroyRef,
   EventEmitter,
   Input,
   OnChanges,
@@ -21,7 +21,7 @@ import {
   booleanAttribute,
   forwardRef,
   inject,
-  DestroyRef
+  signal
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
@@ -75,7 +75,7 @@ const NZ_CONFIG_MODULE_NAME: NzConfigKey = 'tree';
           [maxBufferPx]="nzVirtualMaxBufferPx"
           [style.height]="nzVirtualHeight"
         >
-          <ng-container *cdkVirtualFor="let node of nzFlattenNodes; trackBy: trackByFlattenNode">
+          <ng-container *cdkVirtualFor="let node of nzFlattenNodes(); trackBy: trackByFlattenNode">
             <nz-tree-node
               builtin
               [icon]="node.icon"
@@ -125,7 +125,7 @@ const NZ_CONFIG_MODULE_NAME: NzConfigKey = 'tree';
           [class.ant-select-tree-list-holder-inner]="nzSelectMode"
           [class.ant-tree-list-holder-inner]="!nzSelectMode"
         >
-          @for (node of nzFlattenNodes; track trackByFlattenNode($index, node)) {
+          @for (node of nzFlattenNodes(); track trackByFlattenNode($index, node)) {
             <nz-tree-node
               builtin
               animation-tree-collapse
@@ -212,7 +212,6 @@ export class NzTreeComponent extends NzTreeBase implements OnInit, OnChanges, Co
   readonly _nzModuleName: NzConfigKey = NZ_CONFIG_MODULE_NAME;
 
   protected readonly dir = inject(Directionality).valueSignal;
-  private readonly cdr = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
 
   @Input({ transform: booleanAttribute }) @WithConfig() nzShowIcon: boolean = false;
@@ -246,7 +245,7 @@ export class NzTreeComponent extends NzTreeBase implements OnInit, OnChanges, Co
   }>;
   @ViewChild(CdkVirtualScrollViewport, { read: CdkVirtualScrollViewport })
   cdkVirtualScrollViewport!: CdkVirtualScrollViewport;
-  nzFlattenNodes: NzTreeNode[] = [];
+  readonly nzFlattenNodes = signal<NzTreeNode[]>([]);
 
   @Output() readonly nzExpandedKeysChange: EventEmitter<string[]> = new EventEmitter<string[]>();
   @Output() readonly nzSelectedKeysChange: EventEmitter<string[]> = new EventEmitter<string[]>();
@@ -495,7 +494,6 @@ export class NzTreeComponent extends NzTreeBase implements OnInit, OnChanges, Co
       this.nzTreeService.rootNodes,
       this.getExpandedNodeList().map(v => v.key)
     );
-    this.cdr.markForCheck();
   }
 
   constructor() {
@@ -504,11 +502,11 @@ export class NzTreeComponent extends NzTreeBase implements OnInit, OnChanges, Co
 
   ngOnInit(): void {
     this.nzTreeService.flattenNodes$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(data => {
-      this.nzFlattenNodes =
+      this.nzFlattenNodes.set(
         !!this.nzVirtualHeight && this.nzHideUnMatched && this.nzSearchValue?.length > 0
           ? data.filter(d => !d.canHide)
-          : data;
-      this.cdr.markForCheck();
+          : data
+      );
     });
   }
 

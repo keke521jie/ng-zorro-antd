@@ -9,15 +9,15 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  effect,
   ElementRef,
   forwardRef,
   inject,
-  Input,
+  input,
   numberAttribute,
-  OnChanges,
-  QueryList,
-  SimpleChanges,
-  ViewChildren,
+  signal,
+  untracked,
+  viewChildren,
   ViewEncapsulation
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -49,9 +49,9 @@ import { NzInputDirective } from './input.directive';
         type="text"
         maxlength="1"
         size="1"
-        [nzSize]="nzSize"
+        [nzSize]="nzSize()"
         [formControl]="item"
-        [nzStatus]="nzStatus"
+        [nzStatus]="nzStatus()"
         (input)="onInput($index, $event)"
         (focus)="onFocus($event)"
         (keydown)="onKeyDown($index, $event)"
@@ -72,41 +72,44 @@ import { NzInputDirective } from './input.directive';
   ],
   imports: [NzInputDirective, ReactiveFormsModule]
 })
-export class NzInputOtpComponent implements ControlValueAccessor, OnChanges {
+export class NzInputOtpComponent implements ControlValueAccessor {
   private formBuilder = inject(FormBuilder);
   private destroyRef = inject(DestroyRef);
 
-  @ViewChildren('otpInput') otpInputs!: QueryList<ElementRef>;
+  readonly otpInputs = viewChildren<ElementRef<HTMLInputElement>>('otpInput');
 
-  @Input({ transform: numberAttribute }) nzLength: number = 6;
-  @Input() nzSize: NzSizeLDSType = 'default';
-  @Input({ transform: booleanAttribute }) disabled = false;
-  @Input() nzStatus: NzStatus = '';
-  @Input() nzFormatter: (value: string) => string = value => value;
-  @Input() nzMask: string | null = null;
+  readonly nzLength = input(6, { transform: numberAttribute });
+  readonly nzSize = input<NzSizeLDSType>('default');
+  readonly disabled = input(false, { transform: booleanAttribute });
+  readonly nzStatus = input<NzStatus>('');
+  readonly nzFormatter = input<(value: string) => string>(value => value);
+  readonly nzMask = input<string | null>(null);
 
   protected otpArray!: FormArray<FormControl<string>>;
-  private internalValue: string[] = [];
+  private readonly internalValue = signal<string[]>([]);
   private onChangeCallback?: (_: NzSafeAny) => void;
   onTouched: OnTouchedType = () => {};
 
   constructor() {
     this.createFormArray();
-  }
 
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['nzLength']?.currentValue) {
-      this.createFormArray();
-    }
+    effect(() => {
+      const length = this.nzLength();
+      untracked(() => {
+        if (this.otpArray.length !== length) {
+          this.createFormArray();
+        }
+      });
+    });
 
-    if (changes['disabled']) {
-      this.setDisabledState(this.disabled);
-    }
+    effect(() => {
+      this.setDisabledState(this.disabled());
+    });
   }
 
   onInput(index: number, event: Event): void {
     const inputElement = event.target as HTMLInputElement;
-    const nextInput = this.otpInputs.toArray()[index + 1];
+    const nextInput = this.otpInputs()[index + 1];
 
     if (inputElement.value && nextInput) {
       nextInput.nativeElement.focus();
@@ -121,12 +124,16 @@ export class NzInputOtpComponent implements ControlValueAccessor, OnChanges {
   }
 
   onKeyDown(index: number, event: KeyboardEvent): void {
-    const previousInput = this.otpInputs.toArray()[index - 1];
+    const previousInput = this.otpInputs()[index - 1];
 
     if (event.keyCode === BACKSPACE) {
       event.preventDefault();
 
-      this.internalValue[index] = '';
+      this.internalValue.update(v => {
+        const copy = [...v];
+        copy[index] = '';
+        return copy;
+      });
       this.otpArray.at(index).setValue('', { emitEvent: false });
 
       if (previousInput) {
@@ -145,17 +152,19 @@ export class NzInputOtpComponent implements ControlValueAccessor, OnChanges {
 
   writeValue(value: string): void {
     if (!value) {
+      this.internalValue.set(new Array(this.nzLength()).fill(''));
       this.otpArray.reset();
       return;
     }
 
-    const controlValues = value.split('');
-    this.internalValue = controlValues;
+    const chars = value.split('');
+    const formatter = this.nzFormatter();
+    const mask = this.nzMask();
 
-    controlValues.forEach((val, i) => {
-      const formattedValue = this.nzFormatter(val);
-      const value = this.nzMask ? this.nzMask : formattedValue;
-      this.otpArray.at(i).setValue(value, { emitEvent: false });
+    this.internalValue.set(chars);
+    chars.forEach((val, i) => {
+      const displayValue = mask ? mask : formatter(val);
+      this.otpArray.at(i).setValue(displayValue, { emitEvent: false });
     });
   }
 
@@ -179,12 +188,16 @@ export class NzInputOtpComponent implements ControlValueAccessor, OnChanges {
     const pastedText = event.clipboardData?.getData('text') || '';
     if (!pastedText) return;
 
+    const formatter = this.nzFormatter();
+    const mask = this.nzMask();
+    const length = this.nzLength();
+    const newValue = [...this.internalValue()];
     let currentIndex = index;
+
     for (const char of pastedText.split('')) {
-      if (currentIndex < this.nzLength) {
-        const formattedChar = this.nzFormatter(char);
-        this.internalValue[currentIndex] = char;
-        const maskedValue = this.nzMask ? this.nzMask : formattedChar;
+      if (currentIndex < length) {
+        newValue[currentIndex] = char;
+        const maskedValue = mask ? mask : formatter(char);
         this.otpArray.at(currentIndex).setValue(maskedValue, { emitEvent: false });
         currentIndex++;
       } else {
@@ -192,25 +205,31 @@ export class NzInputOtpComponent implements ControlValueAccessor, OnChanges {
       }
     }
 
+    this.internalValue.set(newValue);
     event.preventDefault(); // this line is needed, otherwise the last index that is going to be selected will also be filled (in the next line).
     this.selectInputBox(currentIndex);
     this.emitValue();
   }
 
   private createFormArray(): void {
+    const length = this.nzLength();
     this.otpArray = this.formBuilder.array<FormControl<string>>([]);
-    this.internalValue = new Array(this.nzLength).fill('');
+    this.internalValue.set(new Array(length).fill(''));
 
-    for (let i = 0; i < this.nzLength; i++) {
+    for (let i = 0; i < length; i++) {
       const control = this.formBuilder.nonNullable.control('', [Validators.required]);
 
       control.valueChanges
         .pipe(
           tap(value => {
-            const unmaskedValue = this.nzFormatter(value);
-            this.internalValue[i] = unmaskedValue;
+            const unmaskedValue = this.nzFormatter()(value);
+            this.internalValue.update(v => {
+              const copy = [...v];
+              copy[i] = unmaskedValue;
+              return copy;
+            });
 
-            control.setValue(this.nzMask ?? unmaskedValue, { emitEvent: false });
+            control.setValue(this.nzMask() ?? unmaskedValue, { emitEvent: false });
 
             this.emitValue();
           }),
@@ -223,14 +242,14 @@ export class NzInputOtpComponent implements ControlValueAccessor, OnChanges {
   }
 
   private emitValue(): void {
-    const result = this.internalValue.join('');
+    const result = this.internalValue().join('');
     if (this.onChangeCallback) {
       this.onChangeCallback(result);
     }
   }
 
   private selectInputBox(index: number): void {
-    const otpInputArray = this.otpInputs.toArray();
+    const otpInputArray = this.otpInputs();
     if (index <= 0) index = 0;
     if (index >= otpInputArray.length) index = otpInputArray.length - 1;
 

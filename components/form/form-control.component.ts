@@ -12,16 +12,20 @@ import {
   Component,
   ContentChild,
   DestroyRef,
+  effect,
   inject,
+  Injector,
   Input,
   OnChanges,
   OnInit,
   SimpleChanges,
   TemplateRef,
+  untracked,
   ViewEncapsulation
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormControlDirective, FormControlName, NgControl, NgModel } from '@angular/forms';
+import { FORM_FIELD, FormField } from '@angular/forms/signals';
 import { Observable, Subscription } from 'rxjs';
 import { filter, startWith, tap } from 'rxjs/operators';
 
@@ -246,8 +250,11 @@ export class NzFormControlComponent implements OnChanges, OnInit, AfterContentIn
     });
   }
 
+  private injector = inject(Injector);
   private nzFormItemComponent = inject(NzFormItemComponent, { host: true, optional: true });
   private nzFormDirective = inject(NzFormDirective, { optional: true });
+
+  @ContentChild(FORM_FIELD, { static: false }) private signalField?: FormField<unknown>;
 
   constructor() {
     this.subscribeAutoTips(this.i18n.localeChange.pipe(tap(locale => (this.localeId = locale.locale))));
@@ -262,6 +269,14 @@ export class NzFormControlComponent implements OnChanges, OnInit, AfterContentIn
   ngOnChanges(changes: SimpleChanges): void {
     const { nzDisableAutoTips, nzAutoTips, nzSuccessTip, nzWarningTip, nzErrorTip, nzValidatingTip } = changes;
 
+    if (this.signalField) {
+      if (nzSuccessTip || nzWarningTip || nzErrorTip || nzValidatingTip) {
+        const state = this.signalField.state();
+        this.setSignalFormStatus(state.invalid(), state.dirty(), state.touched());
+      }
+      return;
+    }
+
     if (nzDisableAutoTips || nzAutoTips) {
       this.updateAutoErrorTip();
       this.setStatus();
@@ -275,12 +290,42 @@ export class NzFormControlComponent implements OnChanges, OnInit, AfterContentIn
   }
 
   ngAfterContentInit(): void {
-    if (!this.validateControl && !this.validateString) {
+    if (this.signalField) {
+      effect(
+        () => {
+          const state = this.signalField!.state();
+          const invalid = state.invalid();
+          const dirty = state.dirty();
+          const touched = state.touched();
+          untracked(() => {
+            this.setSignalFormStatus(invalid, dirty, touched);
+            this.cdr.markForCheck();
+          });
+        },
+        { injector: this.injector }
+      );
+    } else if (!this.validateControl && !this.validateString) {
       if (this.defaultValidateControl instanceof FormControlDirective) {
         this.nzValidateStatus = this.defaultValidateControl.control;
       } else {
         this.nzValidateStatus = this.defaultValidateControl!;
       }
+    }
+  }
+
+  private setSignalFormStatus(invalid: boolean, dirty: boolean, touched: boolean): void {
+    if (invalid && (dirty || touched)) {
+      this.status = 'error';
+    } else if (!invalid && (dirty || touched)) {
+      this.status = 'success';
+    } else {
+      this.status = '';
+    }
+    this.innerTip = this.getInnerTip(this.status);
+    this.nzFormStatusService.formStatusChanges.next({ status: this.status, hasFeedback: this.nzHasFeedback });
+    if (this.nzFormItemComponent) {
+      this.nzFormItemComponent.setWithHelpViaTips(!!this.innerTip);
+      this.nzFormItemComponent.setStatus(this.status);
     }
   }
 

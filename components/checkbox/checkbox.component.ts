@@ -20,6 +20,7 @@ import {
   effect,
   forwardRef,
   inject,
+  signal,
   NgZone,
   ChangeDetectorRef,
   DestroyRef
@@ -99,9 +100,17 @@ export class NzCheckboxComponent implements OnInit, ControlValueAccessor, AfterV
   @Input({ transform: booleanAttribute }) nzAutoFocus = false;
   @Input({ transform: booleanAttribute }) nzDisabled = false;
   @Input({ transform: booleanAttribute }) nzIndeterminate = false;
-  @Input({ transform: booleanAttribute }) nzChecked = false;
   @Input() nzId: string | null = null;
   @Input() nzName: string | null = null;
+
+  private readonly _nzChecked = signal(false);
+  @Input({ transform: booleanAttribute })
+  set nzChecked(v: boolean) {
+    this._nzChecked.set(v);
+  }
+  get nzChecked(): boolean {
+    return this._nzChecked();
+  }
 
   innerCheckedChange(checked: boolean): void {
     if (!this.nzDisabled && !this.checkboxGroupComponent?.finalDisabled()) {
@@ -111,8 +120,7 @@ export class NzCheckboxComponent implements OnInit, ControlValueAccessor, AfterV
   }
 
   writeValue(value: boolean): void {
-    this.nzChecked = value;
-    this.cdr.markForCheck();
+    this._nzChecked.set(value);
   }
 
   registerOnChange(fn: OnChangeType): void {
@@ -193,7 +201,7 @@ export class NzCheckboxComponent implements OnInit, ControlValueAccessor, AfterV
   }
 
   private setValue(value: boolean): void {
-    this.nzChecked = value;
+    this._nzChecked.set(value);
     this.onChange(value);
     this.nzCheckedChange.emit(value);
   }
